@@ -1,0 +1,51 @@
+# Plant-GCN default configuration (Rahman et al. 2025, Smart Agricultural Technology 10:100743)
+
+data:
+  path: data/Combind_H_canopy.xlsx  # placeholder, data not committed (see data/README.md); override with --data
+  filter: null                 # optional row filter, e.g. {column: Treatment, values: [Mild stress]}
+  spectral_columns: auto       # auto = all float-named columns; or [start, end] positional slice; or a list of names
+  wavelength_range: null       # optional [lo, hi] in nm to keep only that range
+  target_columns: [RWC, Emm, gsw, PhiPS2, ETR]  # traits to predict
+  stratify_columns: [Treatment, Day]            # columns forming the stratification key of the test split
+  test_size: 0.15              # fraction held out as the test set (split before any augmentation)
+  split_seed: 42               # seed of the test split; an int or a list (e.g. [42, 7, 123]) to report over several test splits
+
+balance:
+  enabled: false               # SMOTE-ENN balancing of train-val (off for GCN)
+  target: RWC                  # target column defining the low/high class
+  threshold: 70                # class label = target < threshold
+
+augmentation:
+  enabled: true                # augment train-val spectra (never test)
+  mode: online                 # online = graph over real plants, jitter redrawn every epoch; static = n_copies fixed copies as nodes
+  n_copies: 5                  # augmented copies per spectrum (static mode only)
+  include_original: true       # keep the real spectra as well as the copies (static mode only)
+  offset_percent: 0.06         # offset ~ U(-p*std, +p*std), std of the train-val matrix
+  slope_variation: 0.05        # slope ~ U(1-s, 1+s)
+
+split:
+  val_size: 0.3                # fraction of augmented train-val used for validation
+  group_aware: true            # keep copies of one spectrum on one side; false = paper's random split
+
+graph:
+  k: 3                         # nearest neighbours per node (paper's best; Table 2 sweeps 1,3,5,7,10)
+
+model:
+  name: gcn                    # gcn or gat
+  hidden1: 64                  # width of the first graph layer
+  hidden2: 32                  # width of the second graph layer
+  dropout: 0.3                 # dropout before the output layer
+
+training:
+  lr: 5.0e-3                   # peak Adam learning rate
+  weight_decay: 1.0e-5         # Adam L2 penalty
+  warmup_epochs: 50            # linear warm-up from lr*0.01 to lr
+  plateau_patience: 100        # ReduceLROnPlateau patience (factor 0.5) on val RMSE
+  epochs: 3000                 # maximum epochs
+  early_stopping_patience: 300 # stop after this many epochs without val RMSE improvement
+
+evaluation:
+  group_by: Day                # test metrics are also written per value of this meta column
+
+seeds: [42]                    # one run per seed; summary.json reports mean and std
+output_dir: runs/plant_gcn     # where results are written

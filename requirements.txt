@@ -1,0 +1,9 @@
+numpy
+pandas
+openpyxl
+scikit-learn
+imbalanced-learn
+matplotlib
+pyyaml
+torch>=2.0
+torch_geometric>=2.3
