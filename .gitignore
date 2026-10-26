@@ -11,3 +11,4 @@ runs/
 # data and predictions are never committed
 *.xlsx
 *.csv
+.pytest_cache/

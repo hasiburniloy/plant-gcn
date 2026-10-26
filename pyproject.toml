@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "plant-gcn"
+version = "1.0.0"
+description = "Plant-GCN: graph convolutional network predicting blueberry physiological traits from hyperspectral reflectance"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.9"
+authors = [{name = "Md. Hasibur Rahman"}]
+dynamic = ["dependencies"]
+
+[tool.setuptools.dynamic]
+dependencies = {file = ["requirements.txt"]}
+
+[tool.setuptools.packages.find]
+include = ["plant_gcn*"]
+
+[tool.setuptools.package-data]
+plant_gcn = ["config.yaml"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

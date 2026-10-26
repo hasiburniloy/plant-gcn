@@ -1,0 +1,27 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite the article below."
+type: software
+title: "Plant-GCN"
+authors:
+  - family-names: Rahman
+    given-names: Md. Hasibur
+license: MIT
+repository-code: "https://github.com/hasiburniloy/plant-gcn"
+preferred-citation:
+  type: article
+  title: "A graph convolutional network approach for hyperspectral image analysis of blueberries physiological traits under drought stress"
+  authors:
+    - {family-names: Rahman, given-names: Md. Hasibur}
+    - {family-names: Busby, given-names: Savannah}
+    - {family-names: Hanif, given-names: Sajid}
+    - {family-names: Maruf, given-names: Md Mesbahul}
+    - {family-names: Ahmad, given-names: Faraz}
+    - {family-names: Ru, given-names: Sushan}
+    - {family-names: Sanz-Saez, given-names: Alvaro}
+    - {family-names: Zheng, given-names: Jingyi}
+    - {family-names: Rehman, given-names: Tanzeel U.}
+  journal: "Smart Agricultural Technology"
+  volume: 10
+  start: 100743
+  year: 2025
+  doi: "10.1016/j.atech.2024.100743"

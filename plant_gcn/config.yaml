@@ -1,7 +1,7 @@
 # Plant-GCN default configuration (Rahman et al. 2025, Smart Agricultural Technology 10:100743)
 
 data:
-  path: data/Combind_H_canopy.xlsx  # placeholder, data not committed (see data/README.md); override with --data
+  path: data/Combind_H_canopy.xlsx  # placeholder, data not committed (see README.md, Data); override with --data
   filter: null                 # optional row filter, e.g. {column: Treatment, values: [Mild stress]}
   spectral_columns: auto       # auto = all float-named columns; or [start, end] positional slice; or a list of names
   wavelength_range: null       # optional [lo, hi] in nm to keep only that range
@@ -28,7 +28,7 @@ split:
   group_aware: true            # keep copies of one spectrum on one side; false = paper's random split
 
 graph:
-  k: 3                         # nearest neighbours per node (paper's best; Table 2 sweeps 1,3,5,7,10)
+  k: 3                         # nearest neighbours per node (paper: 3)
 
 model:
   name: gcn                    # gcn or gat

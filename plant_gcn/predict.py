@@ -15,8 +15,8 @@ import numpy as np
 import pandas as pd
 import torch
 
-from common.io import load_table
-from common.metrics import score
+from plant_gcn.common.io import load_table
+from plant_gcn.common.metrics import score
 
 from .graph import append_nodes
 from .model import build_model

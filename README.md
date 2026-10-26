@@ -1,74 +1,145 @@
 # Plant-GCN
 
-Graph convolutional network that predicts blueberry physiological traits (relative water content RWC, transpiration Emm, stomatal conductance gsw, PhiPS2, ETR) from canopy hyperspectral reflectance (514–1000 nm).
+Graph convolutional network that predicts blueberry physiological traits from canopy hyperspectral reflectance: leaf water content (LWC / RWC), transpiration rate (E), stomatal conductance (gs), photosystem II efficiency (ΦPSII), electron transport rate (ETR) and photosynthesis (A).
 
-Code for: Rahman, M. H., Busby, S., Hanif, S., Maruf, M. M., Ahmad, F., Ru, S., Sanz-Saez, A., Zheng, J., Rehman, T. U. (2025). *A graph convolutional network approach for hyperspectral image analysis of blueberries physiological traits under drought stress*. **Smart Agricultural Technology** 10:100743, doi:[10.1016/j.atech.2024.100743](https://doi.org/10.1016/j.atech.2024.100743).
+Official code for:
 
-No data is included; see [Data format](#data-format).
+> Rahman, M. H., Busby, S., Hanif, S., Maruf, M. M., Ahmad, F., Ru, S., Sanz-Saez, A., Zheng, J., Rehman, T. U. (2025). **A graph convolutional network approach for hyperspectral image analysis of blueberries physiological traits under drought stress.** *Smart Agricultural Technology*, 10, 100743. [doi:10.1016/j.atech.2024.100743](https://doi.org/10.1016/j.atech.2024.100743)
 
-## How it works
+This repository contains the preprocessing pipeline, graph construction, model, training and prediction code with the paper's configuration. No data is included (see [Data](#data)).
 
-Each preprocessed spectrum is a node; edges link it to its k nearest neighbours in spectral space (undirected, k = 3). A two-layer GCN (64, 32) with dropout 0.3 and a linear head regresses the five traits at once. Training is full-batch and transductive: all train + val spectra form one graph, the loss uses train nodes only. Test spectra are appended to that graph after training and read at their new positions; their labels are never used.
+## Architecture
 
-Data pipeline (`common/`):
+### Graph construction
 
-1. Stratified 85:15 test split, made first and never augmented.
-2. Offset/slope augmentation of the train-val spectra (offset 6 % of the band std, slope ±5 %).
-3. Group-aware 70:30 train/val split (copies of one plant stay on one side).
-4. log10(1/R) → multiplicative scatter correction → mean-centring, fitted on the training split only.
-5. Targets standardised with the training mean and std; metrics are reported in original units.
+Each plant is one node. Its node feature vector is the preprocessed average spectral reflectance of the plant (log10(1/R) → multiplicative scatter correction → mean-centring), and its node labels are the measured physiological traits. Edges are built with k-nearest neighbours on the spectral features (k = 3 in the paper), giving a symmetric adjacency matrix. Training and validation nodes form one graph; the loss is computed on training nodes only, and the graph convolutions let information flow along the edges (transductive learning).
 
-`augmentation.mode: online` (default) builds the graph over the real plants and redraws the jitter on the node features every epoch, with edges fixed from the clean features. `static` draws `n_copies` fixed copies per plant and makes all of them nodes (the paper's protocol).
+![Graph construction (paper Fig. 1)](docs/graph_construction.png)
+
+*Fig. 1 of the paper: tabular spectra and ground truths become nodes; edges are established with k-NN on the spectral features.*
+
+### Plant-GCN
+
+Two graph convolutional layers (64 and 32 channels), each followed by ReLU, then dropout (30 %) and one linear layer that outputs all traits at once.
+
+![Plant-GCN architecture (paper Fig. 2)](docs/plant_gcn_architecture.png)
+
+*Fig. 2 of the paper: Plant-GCN.*
+
+Layer-wise propagation (Kipf & Welling): `H(l+1) = ReLU( D̂^-1/2 Â D̂^-1/2 H(l) W(l) )`, with `Â = A + I` and `D̂` its degree matrix.
 
 ```
-spectra (N x 180) -> log10(1/R), MSC, mean-centre -> k-NN graph -> GCN 64 -> GCN 32 -> dropout -> linear -> 5 traits
+spectra X (N x 180) ──► k-NN graph (A, X)
+       │
+       ▼
+GCNConv 180 → 64 ─► ReLU ─► GCNConv 64 → 32 ─► ReLU ─► Dropout 0.3 ─► Linear 32 → T
+       │
+       ▼
+   T traits per node (LWC, E, gs, ΦPSII, ETR, ...)
 ```
 
-## Install
+| hyperparameter | value (paper) |
+|---|---|
+| k nearest neighbours | 3 |
+| GCN channels | 64, 32 |
+| dropout | 0.3 |
+| loss | MSE on standardised targets |
+| optimiser | Adam, weight decay 1e-5 |
+| learning rate | linear warm-up, then reduce-on-plateau on validation RMSE |
+| augmentation | random offset (6 % of band std) and slope (±5 %) |
+
+### Training pipeline
+
+1. Stratified 85:15 hold-out test split (by treatment and day), made before any augmentation.
+2. Offset/slope augmentation of the train-val spectra (`augmentation.mode: online`, default, redraws the jitter each epoch on the real-plant graph; `static` draws `n_copies` fixed copies per plant and makes them nodes, the paper's protocol).
+3. 70:30 train/validation node split (group-aware, so copies of one plant stay on one side).
+4. log10(1/R) → MSC → mean-centring, fitted on the training nodes only; targets standardised with the training mean and std.
+5. Full-batch transductive training with early stopping on validation RMSE.
+6. Test: the held-out spectra are preprocessed with the training statistics, appended to the train-val graph (k-NN rebuilt), and predicted; their labels are never used. `predict.py` does the same for new spectra using the reference graph stored in `model.pt`.
+
+## Installation
 
 ```bash
-pip install -r requirements.txt
+git clone https://github.com/hasiburniloy/plant-gcn.git
+cd plant-gcn
+pip install -e .
 ```
 
-PyTorch and PyTorch Geometric may need a platform-specific install; see [pytorch.org](https://pytorch.org) and [pyg.org](https://pyg.org).
+PyTorch and PyTorch Geometric may need a platform-specific install; see [pytorch.org](https://pytorch.org/get-started/locally/) and [PyG](https://pytorch-geometric.readthedocs.io/en/latest/install/installation.html). Tested with Python 3.9–3.12, PyTorch ≥ 2.0, PyG ≥ 2.3.
 
-## Data format
+## Data
 
-One row per plant, `.xlsx` or `.csv`: metadata columns (e.g. `Day`, `PlantID`, `Genotype`, `Treatment`), the target columns, then reflectance columns whose headers are wavelengths in nm (values in (0, 1]). Spectral columns are detected automatically as the numeric-named columns; `data.spectral_columns` and `data.wavelength_range` in `config.yaml` can restrict them. If your table has no `Treatment`/`Day` columns, set `data.stratify_columns: []`. Details in `data/README.md`.
+Data files are not part of this repository. Provide one table, one row per plant, `.xlsx` or `.csv`:
 
-## Train
+| Day | PlantID | Genotype | Treatment | RWC | Emm | gsw | PhiPS2 | ETR | 514 | 516 | … | 1000 |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
 
-Run from the repo root.
+- Reflectance columns: headers are wavelengths in nm, values in (0, 1]. They are detected automatically as the numeric-named columns; `data.spectral_columns` / `data.wavelength_range` in the config can restrict them.
+- Target columns are listed in `data.target_columns`; metadata columns are anything else. `data.stratify_columns` (default `[Treatment, Day]`) must exist, or be set to `[]`.
+
+A synthetic table with the right layout can be generated for a dry run:
+
+```bash
+python scripts/make_example_data.py --out example_data.csv
+```
+
+## Usage
+
+Run from the repository root.
+
+**Train**
 
 ```bash
 python -m plant_gcn.train --config plant_gcn/config.yaml --data path/to/data.xlsx --out runs/plant_gcn
 ```
 
-Any config value can be overridden: `--set graph.k=5 --set training.epochs=2000 --set seeds=[1,2,3]`.
+Any config value can be overridden on the command line: `--set graph.k=5 --set training.epochs=2000 --set seeds=[1,2,3]`. Test sets are small, so `--repeat-splits 5` repeats the whole run on five different test splits and reports mean ± std.
 
-Test sets are small, so a single split is noisy. `--repeat-splits 5` runs the first 5 of the split seeds `[42, 7, 123, 2024, 99, 11, 3, 77, 500, 2025]` (or set `data.split_seed` to a list) and reports mean ± std over splits:
+Outputs per run (`runs/plant_gcn/seed_<s>/`, or `split_<ss>/seed_<s>/` with several test splits): `model.pt` (weights, fitted preprocessing, reference graph nodes), `metrics.json` (train / val / test R² and RMSE per target, original units), `predictions_{train,val,test}.csv`, `metrics_test_by_Day.json`, `parity_plot.png`, `loss_curve.png`; `summary.json` aggregates all runs.
 
-```bash
-python -m plant_gcn.train --config plant_gcn/config.yaml --data path/to/data.xlsx --out runs/plant_gcn --repeat-splits 5
-```
-
-Outputs per run (`runs/plant_gcn/seed_<s>/`, or `split_<ss>/seed_<s>/` with several split seeds): `model.pt` (weights, fitted preprocessing, reference graph nodes), `metrics.json` (train / val / test R2 and RMSE per target, original units), `predictions_{train,val,test}.csv`, `metrics_test_by_Day.json`, `parity_plot.png`, `loss_curve.png`. `summary.json` has mean and std across all runs and a `per_split` block.
-
-## Predict
+**Predict**
 
 ```bash
 python -m plant_gcn.predict --model runs/plant_gcn/seed_42/model.pt --data new_spectra.xlsx --out predictions.csv
 ```
 
-The new file needs the same spectral columns as training. New spectra are preprocessed with the training statistics stored in `model.pt`, appended to the stored reference graph, and predicted. Output has the non-spectral columns plus `<target>_predicted`; R2/RMSE are printed if the targets are present.
+The new file needs the same spectral columns as training. The output has the non-spectral columns plus `<target>_predicted`; R² and RMSE are printed if the target columns are present.
+
+**Test**
+
+```bash
+pytest -q
+```
 
 ## Configuration
 
-All keys are documented in `plant_gcn/config.yaml`. Main groups: `data` (path, targets, stratification, test size, split seed), `augmentation` (mode, n_copies, offset_percent, slope_variation), `split` (val fraction, group_aware), `graph` (k, metric), `model` (hidden sizes, dropout), `training` (lr, weight_decay, warm-up, scheduler, epochs, early stopping), `seeds`.
+All keys are documented in [`plant_gcn/config.yaml`](plant_gcn/config.yaml):
 
-## Protocol notes
+| group | keys |
+|---|---|
+| `data` | path, filter, spectral_columns, wavelength_range, target_columns, stratify_columns, test_size, split_seed |
+| `balance` | enabled (SMOTE-ENN of train-val, off for Plant-GCN), target, threshold |
+| `augmentation` | enabled, mode online/static, n_copies, include_original, offset_percent, slope_variation |
+| `split` | val_size, group_aware |
+| `graph` | k |
+| `model` | name gcn/gat, hidden1, hidden2, dropout |
+| `training` | lr, weight_decay, warmup_epochs, plateau_patience, epochs, early_stopping_patience |
+| `seeds`, `output_dir` | training seeds; output folder |
 
-Follows the paper's sections 2.5–2.6 with two deliberate differences: the train/val split is group-aware (`split.group_aware: false` restores the paper's random node split) and augmentation copies the targets unchanged. Augmented reflectance is floored at 1e-4 so log10(1/R) stays finite.
+## Repository layout
+
+```
+plant_gcn/
+  common/         shared pipeline: io, preprocessing, augment, balance, split, dataset, metrics, utils
+  graph.py        k-NN edge construction, graph building, appending new nodes
+  model.py        PlantGCN (and a GAT variant)
+  train.py        training / evaluation CLI
+  predict.py      prediction CLI for new spectra
+  config.yaml     paper configuration
+scripts/make_example_data.py   synthetic table for a dry run
+tests/            smoke tests on synthetic data
+docs/             figures
+```
 
 ## Citation
 
@@ -86,4 +157,4 @@ Follows the paper's sections 2.5–2.6 with two deliberate differences: the trai
 
 ## License
 
-MIT, see `LICENSE`.
+MIT, see [`LICENSE`](LICENSE).
