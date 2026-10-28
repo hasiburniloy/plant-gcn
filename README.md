@@ -1,6 +1,6 @@
 # Plant-GCN
 
-Graph convolutional network that predicts blueberry physiological traits from canopy hyperspectral reflectance: leaf water content (LWC / RWC), transpiration rate (E), stomatal conductance (gs), photosystem II efficiency (ΦPSII), electron transport rate (ETR) and photosynthesis (A).
+Graph convolutional network that predicts blueberry physiological traits from canopy hyperspectral reflectance: leaf water content (LWC), transpiration rate (E), stomatal conductance (gs), photosystem II efficiency (ΦPSII), electron transport rate (ETR) and photosynthesis (A).
 
 Official code for:
 
